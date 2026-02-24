@@ -4,13 +4,11 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
 from nicegui import ui
 
-# CSV apdorojimas
 def paruosti_duomenis():
     print('atidaromas CSV ir valomi duomenys')
     df_raw = pd.read_csv('dataset/medium_articles.csv')
     df_raw = df_raw.dropna(subset=['text', 'title']).reset_index(drop=True)
 
-    # blacklistas
     bad_words = {
         'medium', 'learn', 'using', 'things', 'function', 'model'
     }
@@ -41,9 +39,8 @@ def paruosti_duomenis():
     panaudoti_pavadinimai = set()
 
     for i in range(n_clusters):
-        top_words = [terms[ind] for ind in order_centroids[i, :20]] # turi but nesikartojantys
+        top_words = [terms[ind] for ind in order_centroids[i, :20]]
         
-        # filtravimas
         parinktas_pavad = f"Topic {i+1}"
         for word in top_words:
             w_title = word.title()
@@ -59,11 +56,8 @@ def paruosti_duomenis():
     
     return df_sample, temos_info
 
-# tam, kad duomenis nebutu paruosiami is naujo parefreshinus
 if __name__ in {"__main__", "__mp_main__"}:
     df_processed, info_processed = paruosti_duomenis()
-
-# UI logika visa (didele dalis vibecodinta)
 
 class StraipsniuNarsykle:
     def __init__(self, data, temos):
@@ -81,7 +75,7 @@ class StraipsniuNarsykle:
             d = d[d['tema_id'] == self.pasirinkta_tema]
         if self.paieskos_tekstas:
             mask = d['title'].str.contains(self.paieskos_tekstas, case=False, na=False) | \
-                   d['text'].str.contains(self.paieskos_tekstas, case=False, na=False)
+                   d['text'].str.contains(self.paieskos_tekstas, case=False, na=False) # searcha kad ieskotu ne konkrecios frazes o panasiu, su AI metodais. Pvz ieskome bitcoin cryptocurrency, tai rodytu ne konkrecia fraze bitcoin cryptocurrency, o susijusius. Galima naudoti AI metodus
             d = d[mask]
         return d
 
@@ -116,7 +110,6 @@ class StraipsniuNarsykle:
                         ui.label(str(row['text'])[:350] + '...').classes('text-sm mb-4')
                         ui.button('Skaityti daugiau', on_click=lambda r=row: self.rodyti_straipsni(r['title'], r['text'])).props('flat icon=menu_book')
 
-            # paginationas
             max_p = max(1, (len(d) - 1) // self.per_puslapi + 1)
             with ui.row().classes('w-full justify-center items-center gap-4 mt-4 pb-10'):
                 ui.button(icon='arrow_back', on_click=lambda: self.keisti_puslapi(-1)).set_enabled(self.puslapis > 1)
@@ -132,8 +125,6 @@ class StraipsniuNarsykle:
         self.pasirinkta_tema = tema_id
         self.puslapis = 1
         self.rodyti_straipsnius()
-
-# nicegui pagrindinis puslapis
 
 @ui.page('/')
 def main_page():
@@ -160,7 +151,6 @@ def main_page():
         global rezultatai_container
         rezultatai_container = ui.column().classes('w-full')
         
-        # papildomas metodas narsyklei, kad veiktų su input
         narsykle.ieskoti_su_reiksme = lambda v: [setattr(narsykle, 'paieskos_tekstas', v), 
                                                 setattr(narsykle, 'puslapis', 1), 
                                                 narsykle.rodyti_straipsnius()]
