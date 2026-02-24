@@ -6,52 +6,55 @@ from nicegui import ui
 
 # CSV apdorojimas
 def paruosti_duomenis():
-    print('Atidaromas CSV ir valomi duomenys...')
+    print('atidaromas CSV ir valomi duomenys')
     df_raw = pd.read_csv('dataset/medium_articles.csv')
     df_raw = df_raw.dropna(subset=['text', 'title']).reset_index(drop=True)
 
-    # spam tekstas, visada pasirode ir atskira tema Medium/Learn, daug tokiu CSV faile, boilerpleitas
+    # blacklistas
+    bad_words = {
+        'medium', 'learn', 'using', 'things', 'function', 'model'
+    }
+
     spam_text = "Learn more. Medium is an open platform"
 
     def is_clean_english(row):
         text = str(row['text'])
-        # jeigu tekstas per trumpas arba medium boilerplate
-        if spam_text in text or len(text) < 500:
-            return False
-        # hieroglifu salinimas (kinu, japonu kalbos ascii kodai)
-        if re.search(r'[\u4e00-\u9fff]', text):
-            return False
-        # tikriname ASCII kad butu tik anglu kalba straipsniai (>85% zodziu standartisku raidziu straipsnyje)
+        if spam_text in text or len(text) < 500: return False
+        if re.search(r'[\u4e00-\u9fff]', text): return False
         ascii_chars = len(text.encode('ascii', 'ignore'))
         return (ascii_chars / len(text)) > 0.85 if len(text) > 0 else False
 
-    # filtravimas
     df_clean = df_raw[df_raw.apply(is_clean_english, axis=1)].copy()
-    
-    # random 10000 kokybisku straipsniu (10000 del greicio)
-    df_sample = df_clean.sample(min(10000, len(df_clean))).copy()
-    print(f'svariu straipsniu: {len(df_sample)}')
+    df_sample = df_clean.sample(min(100000, len(df_clean))).copy()
 
-    # vektorizacija ir klasteringas
-    vectorizer = TfidfVectorizer(stop_words='english', max_features=1000, ngram_range=(1, 2))
+    vectorizer = TfidfVectorizer(stop_words='english', max_features=1000, ngram_range=(1, 1))
     X = vectorizer.fit_transform(df_sample['text'])
 
     n_clusters = 5
     kmeans = KMeans(n_clusters=n_clusters, n_init=10)
     df_sample['tema_id'] = kmeans.fit_predict(X)
 
-    # temu keywordsai
     terms = vectorizer.get_feature_names_out()
     order_centroids = kmeans.cluster_centers_.argsort()[:, ::-1]
 
     temos_info = {}
+    panaudoti_pavadinimai = set()
+
     for i in range(n_clusters):
-        top_words = [terms[ind] for ind in order_centroids[i, :10]]
-        # filtruojami pavadinimai (ismetami bendriniai zodziai is and ir t.t.)
-        pavad_words = [w.title() for w in top_words if len(w) > 4 and w.lower() not in ['medium', 'learn']][:2]
+        top_words = [terms[ind] for ind in order_centroids[i, :20]] # turi but nesikartojantys
+        
+        # filtravimas
+        parinktas_pavad = f"Topic {i+1}"
+        for word in top_words:
+            w_title = word.title()
+            if len(word) > 3 and word.lower() not in bad_words and w_title not in panaudoti_pavadinimai:
+                parinktas_pavad = w_title
+                panaudoti_pavadinimai.add(w_title)
+                break 
+
         temos_info[i] = {
-            'pavadinimas': ' / '.join(pavad_words) if pavad_words else f"Topic {i+1}",
-            'raktazodziai': ', '.join(top_words)
+            'pavadinimas': parinktas_pavad,
+            'raktazodziai': ', '.join(top_words[:10])
         }
     
     return df_sample, temos_info
